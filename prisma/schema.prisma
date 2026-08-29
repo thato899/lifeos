@@ -1,0 +1,467 @@
+// LifeOS database schema.
+//
+// Design notes (see docs/architecture.md for the full write-up):
+// - Every user-owned row carries `userId` and is always queried scoped to the
+//   authenticated user (see src/lib/auth-scope.ts). This is the data-isolation
+//   guarantee required by the WebMCP security model.
+// - `ActivityEvent` is the single append-only log for everything that happens
+//   in the app, whether triggered by a human clicking a button or an agent
+//   invoking a WebMCP tool. The Agent Activity panel reads from this table.
+// - `ApprovalRequest` backs the human-in-the-loop control system: high-impact
+//   WebMCP write tools create a pending request instead of mutating data.
+// - Recurrence and constraint data (task recurrence, schedule preferences)
+//   is stored as small structured JSON blobs rather than exploded into many
+//   nullable columns, since it is written and read as a unit and validated
+//   with Zod at the application boundary, not queried column-by-column.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// Prisma 7: the connection URL is no longer set here. Prisma Migrate reads it
+// from prisma7.config.ts (datasource.url); PrismaClient at runtime receives it
+// via a driver adapter — see src/lib/db.ts.
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Priority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum TaskStatus {
+  inbox
+  planned
+  in_progress
+  completed
+  archived
+}
+
+enum GoalStatus {
+  active
+  paused
+  completed
+  abandoned
+}
+
+enum RecurrenceFrequency {
+  none
+  daily
+  weekly
+  monthly
+}
+
+enum ExpenseCategory {
+  housing
+  food
+  transport
+  utilities
+  education
+  entertainment
+  subscriptions
+  other
+}
+
+enum CategoryKind {
+  task
+  expense
+  shopping
+  routine
+}
+
+enum ActorType {
+  human
+  agent
+  system
+}
+
+enum EventType {
+  TASK_CREATED
+  TASK_UPDATED
+  TASK_COMPLETED
+  TASK_REOPENED
+  TASK_DELETED
+  SCHEDULE_CREATED
+  SCHEDULE_UPDATED
+  SCHEDULE_DELETED
+  GOAL_CREATED
+  GOAL_UPDATED
+  GOAL_DELETED
+  EXPENSE_CREATED
+  EXPENSE_UPDATED
+  EXPENSE_DELETED
+  SHOPPING_LIST_CREATED
+  SHOPPING_ITEM_ADDED
+  SHOPPING_ITEM_UPDATED
+  SHOPPING_ITEM_REMOVED
+  ROUTINE_CREATED
+  ROUTINE_UPDATED
+  ROUTINE_DELETED
+  AGENT_ACTION
+  APPROVAL_REQUESTED
+  APPROVAL_GRANTED
+  APPROVAL_REJECTED
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+  expired
+}
+
+// ---------------------------------------------------------------------------
+// User
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String @id @default(cuid())
+  name         String
+  email        String @unique
+  passwordHash String
+
+  // Scheduling preferences the planning engine and agent tools must respect.
+  timezone           String  @default("UTC")
+  workingHoursStart  String  @default("09:00") // "HH:mm", 24h local time
+  workingHoursEnd    String  @default("17:00")
+  noScheduleAfter    String? // e.g. "19:00" — hard boundary the planner won't cross
+  unavailablePeriods Json? // [{ label, dayOfWeek | date, start, end }]
+
+  isDemo Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tasks            Task[]
+  scheduleBlocks   ScheduleBlock[]
+  goals            Goal[]
+  shoppingLists    ShoppingList[]
+  expenses         Expense[]
+  routines         Routine[]
+  budgets          Budget[]
+  categories       Category[]
+  activityEvents   ActivityEvent[]
+  approvalRequests ApprovalRequest[]
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Tasks
+// ---------------------------------------------------------------------------
+
+model Task {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title            String
+  description      String?
+  notes            String?
+  priority         Priority   @default(medium)
+  status           TaskStatus @default(inbox)
+  dueDate          DateTime?
+  estimatedMinutes Int?
+  category         String?
+  completedAt      DateTime?
+
+  // Cached output of the LifeOS planning heuristic (src/lib/planning/priority-score.ts).
+  // Recalculated by the service layer on every relevant write, never computed ad hoc in the UI.
+  priorityScore Float?
+
+  // { frequency, interval, daysOfWeek?, endDate? } — see src/lib/validation/recurrence.ts
+  recurrence Json?
+
+  goalId String?
+  goal   Goal?   @relation(fields: [goalId], references: [id], onDelete: SetNull)
+
+  tags           TaskTag[]
+  scheduleBlocks ScheduleBlock[]
+
+  dependsOn  TaskDependency[] @relation("DependentTask")
+  dependedBy TaskDependency[] @relation("DependencyTask")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, priority])
+  @@index([userId, dueDate])
+  @@index([goalId])
+  @@map("tasks")
+}
+
+model TaskTag {
+  id     String @id @default(cuid())
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  name   String
+
+  @@unique([taskId, name])
+  @@map("task_tags")
+}
+
+// A task can depend on another task completing first ("dependedBy" cannot be
+// scheduled/completed before all of its "dependsOn" tasks are done).
+model TaskDependency {
+  id            String @id @default(cuid())
+  dependentId   String
+  dependent     Task   @relation("DependentTask", fields: [dependentId], references: [id], onDelete: Cascade)
+  dependsOnId   String
+  dependsOnTask Task   @relation("DependencyTask", fields: [dependsOnId], references: [id], onDelete: Cascade)
+
+  @@unique([dependentId, dependsOnId])
+  @@map("task_dependencies")
+}
+
+// ---------------------------------------------------------------------------
+// Schedule
+// ---------------------------------------------------------------------------
+
+model ScheduleBlock {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title    String
+  start    DateTime
+  end      DateTime
+  category String?
+
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  createdBy ActorType @default(human)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, start])
+  @@index([userId, end])
+  @@index([taskId])
+  @@map("schedule_blocks")
+}
+
+// ---------------------------------------------------------------------------
+// Goals
+// ---------------------------------------------------------------------------
+
+model Goal {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  targetDate  DateTime?
+  progress    Int        @default(0) // 0-100, clamped by the service layer
+  category    String?
+  status      GoalStatus @default(active)
+
+  milestones GoalMilestone[]
+  tasks      Task[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, status])
+  @@map("goals")
+}
+
+model GoalMilestone {
+  id          String    @id @default(cuid())
+  goalId      String
+  goal        Goal      @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  title       String
+  targetDate  DateTime?
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  order       Int       @default(0)
+
+  @@index([goalId])
+  @@map("goal_milestones")
+}
+
+// ---------------------------------------------------------------------------
+// Shopping / errands
+// ---------------------------------------------------------------------------
+
+model ShoppingList {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+
+  items ShoppingItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("shopping_lists")
+}
+
+model ShoppingItem {
+  id        String       @id @default(cuid())
+  listId    String
+  list      ShoppingList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  name      String
+  quantity  String? // free text, e.g. "2 dozen", "1kg" — kept simple for MVP
+  category  String?
+  notes     String?
+  completed Boolean      @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([listId])
+  @@map("shopping_items")
+}
+
+// ---------------------------------------------------------------------------
+// Expenses / budgets
+// ---------------------------------------------------------------------------
+
+model Expense {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount      Decimal         @db.Decimal(10, 2)
+  category    ExpenseCategory
+  date        DateTime
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, date])
+  @@index([userId, category])
+  @@map("expenses")
+}
+
+model Budget {
+  id           String          @id @default(cuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     ExpenseCategory
+  monthlyLimit Decimal         @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, category])
+  @@map("budgets")
+}
+
+// User-defined free-form categories usable across tasks/shopping/routines
+// (expenses use the fixed ExpenseCategory enum above by design — see docs/architecture.md).
+model Category {
+  id     String       @id @default(cuid())
+  userId String
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+  kind   CategoryKind
+  color  String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, name, kind])
+  @@map("categories")
+}
+
+// ---------------------------------------------------------------------------
+// Routines
+// ---------------------------------------------------------------------------
+
+model Routine {
+  id          String              @id @default(cuid())
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  frequency   RecurrenceFrequency @default(weekly)
+  active      Boolean             @default(true)
+
+  steps RoutineStep[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("routines")
+}
+
+model RoutineStep {
+  id               String  @id @default(cuid())
+  routineId        String
+  routine          Routine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  title            String
+  order            Int     @default(0)
+  estimatedMinutes Int?
+
+  @@index([routineId])
+  @@map("routine_steps")
+}
+
+// ---------------------------------------------------------------------------
+// Activity log & approvals (the visible backbone of the WebMCP experience)
+// ---------------------------------------------------------------------------
+
+model ActivityEvent {
+  id     String    @id @default(cuid())
+  userId String
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type   EventType
+  actor  ActorType
+
+  // Concise, human-readable description shown in the Agent Activity panel,
+  // e.g. "Created task 'Submit project report'".
+  summary String
+
+  // WebMCP tool name that produced this event, when actor = agent.
+  toolName String?
+
+  // Small structured payload for the tool inspector / debugging. Never
+  // secrets; see docs/security.md for what is intentionally excluded.
+  metadata Json?
+
+  requiresApproval  Boolean          @default(false)
+  approvalRequestId String?
+  approvalRequest   ApprovalRequest? @relation(fields: [approvalRequestId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([approvalRequestId])
+  @@map("activity_events")
+}
+
+model ApprovalRequest {
+  id         String @id @default(cuid())
+  userId     String
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actionType String // the WebMCP tool name awaiting approval, e.g. "bulk_reschedule"
+  summary    String // human-readable explanation of what will happen
+  payload    Json // validated tool arguments to apply if approved
+
+  status     ApprovalStatus @default(pending)
+  resolvedAt DateTime?
+  resolvedBy ActorType?
+
+  activityEvents ActivityEvent[]
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, status])
+  @@map("approval_requests")
+}
