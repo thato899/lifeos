@@ -39,7 +39,11 @@ function toTaskLite(task: {
   };
 }
 
-function summarize(task: Awaited<ReturnType<typeof db.task.findFirstOrThrow>>) {
+function summarize(
+  task: Awaited<ReturnType<typeof db.task.findFirstOrThrow>> & {
+    tags?: { name: string }[];
+  },
+) {
   return {
     id: task.id,
     title: task.title,
@@ -50,6 +54,7 @@ function summarize(task: Awaited<ReturnType<typeof db.task.findFirstOrThrow>>) {
     dueDate: task.dueDate,
     estimatedMinutes: task.estimatedMinutes,
     category: task.category,
+    tags: (task.tags ?? []).map((t) => t.name),
     priorityScore: task.priorityScore,
     goalId: task.goalId,
     completedAt: task.completedAt,

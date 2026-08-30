@@ -9,7 +9,7 @@ import { AppError } from "@/lib/errors/app-error";
  * createApprovalRequest() and returns { approvalRequired: true, ... } to the
  * agent instead. The human sees the pending request in the Agent Activity
  * panel / approval inbox and explicitly approves or rejects it; only then
- * does resolveApproval() invoke the real tool executor. This is the one
+ * does approveRequest() invoke the real tool executor. This is the one
  * place an agent action can turn into a database write after the fact, and
  * it always re-validates ownership before doing so.
  */
@@ -61,40 +61,49 @@ async function findOwnedApproval(userId: string, approvalId: string) {
 }
 
 /**
- * A registry of functions that can apply an approved payload, keyed by
- * actionType. The WebMCP tool registry populates this via
- * registerApprovalExecutor() so approval.service never has to import every
- * domain service directly (avoids a circular-import mess).
+ * A tool definition, as far as approval resolution needs to know: given the
+ * payload it was originally requested with, validate and run it for real.
+ *
+ * This is deliberately passed in by the caller (webmcp/registry's getTool)
+ * rather than looked up through a module-level registry populated by an
+ * import-time side effect, which is what this used to be. That approach
+ * broke in practice: Next.js compiles server actions and route handlers
+ * into separate module graphs, so the registration side effect in
+ * src/webmcp/registry.ts never ran on the code path the "Approve" button in
+ * the UI takes, and every approval failed with "no handler registered".
+ * Accepting the lookup as a parameter also avoids a circular import between
+ * this file and the webmcp layer (registry.ts already imports from here).
  */
-type ApprovalExecutor = (userId: string, payload: unknown) => Promise<unknown>;
-const executors = new Map<string, ApprovalExecutor>();
-
-export function registerApprovalExecutor(
-  actionType: string,
-  executor: ApprovalExecutor,
-) {
-  executors.set(actionType, executor);
+export interface ExecutableTool {
+  inputSchema: { parse: (payload: unknown) => unknown };
+  execute: (
+    userId: string,
+    input: unknown,
+    actor: "human" | "agent",
+  ) => Promise<unknown>;
 }
 
 export async function approveRequest(
   userId: string,
   approvalId: string,
   resolvedBy: "human" | "agent" = "human",
+  resolveTool: (actionType: string) => ExecutableTool | undefined,
 ) {
   const approval = await findOwnedApproval(userId, approvalId);
   if (approval.status !== "pending") {
     throw AppError.conflict(`This request is already ${approval.status}.`);
   }
 
-  const executor = executors.get(approval.actionType);
-  if (!executor) {
+  const tool = resolveTool(approval.actionType);
+  if (!tool) {
     throw new AppError(
       "NO_EXECUTOR",
       `No handler registered for "${approval.actionType}".`,
     );
   }
 
-  const result = await executor(userId, approval.payload);
+  const input = tool.inputSchema.parse(approval.payload);
+  const result = await tool.execute(userId, input, "agent");
 
   await db.approvalRequest.update({
     where: { id: approvalId },

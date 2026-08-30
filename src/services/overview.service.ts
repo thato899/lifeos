@@ -135,13 +135,11 @@ export async function analyzeDay(userId: string, date: Date = new Date()) {
     },
     scheduledMinutesToday,
     conflicts,
-    topPriorities: ranked
-      .slice(0, 5)
-      .map((r) => ({
-        id: r.task.id,
-        title: r.task.title,
-        explanation: r.explanation,
-      })),
+    topPriorities: ranked.slice(0, 5).map((r) => ({
+      id: r.task.id,
+      title: r.task.title,
+      explanation: r.explanation,
+    })),
   };
 }
 

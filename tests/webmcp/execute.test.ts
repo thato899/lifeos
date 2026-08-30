@@ -95,7 +95,8 @@ describe("executeTool", () => {
     const { approvalId } = result.data as { approvalId: string };
 
     const { approveRequest } = await import("@/services/approval.service");
-    await approveRequest(userId, approvalId, "human");
+    const { getTool } = await import("@/webmcp/registry");
+    await approveRequest(userId, approvalId, "human", getTool);
 
     const afterApproval = await db.task.findUnique({
       where: { id: created.id },
@@ -130,6 +131,7 @@ describe("executeTool", () => {
     // schema-shaped call — never something outside create_task's contract.
     const { createApprovalRequest, approveRequest } =
       await import("@/services/approval.service");
+    const { getTool } = await import("@/webmcp/registry");
     const approval = await createApprovalRequest({
       userId,
       actionType: "delete_task",
@@ -141,7 +143,30 @@ describe("executeTool", () => {
     });
 
     await expect(
-      approveRequest(userId, approval.id, "human"),
+      approveRequest(userId, approval.id, "human", getTool),
     ).rejects.toThrow();
+  });
+
+  it("resolves the tool via the injected resolver, not an import-time side effect", async () => {
+    // Regression test for a real bug: approval resolution used to rely on a
+    // module-level registration loop running as an import side effect
+    // (src/webmcp/registry.ts). That worked by accident in this test file
+    // because it also imports the registry via executeTool — but broke for
+    // real in the app, where the "Approve" server action's module graph
+    // never touched that file. Simulate the broken case directly: a
+    // resolver that legitimately has no tool registered should surface
+    // NO_EXECUTOR, not silently do nothing or crash differently.
+    const { createApprovalRequest, approveRequest } =
+      await import("@/services/approval.service");
+    const approval = await createApprovalRequest({
+      userId,
+      actionType: "delete_task",
+      summary: "test",
+      payload: { taskId: "irrelevant" },
+    });
+
+    await expect(
+      approveRequest(userId, approval.id, "human", () => undefined),
+    ).rejects.toThrow(/no handler registered/i);
   });
 });

@@ -8,17 +8,21 @@ import {
   listApprovals,
   rejectRequest,
 } from "@/services/approval.service";
+import { getTool } from "@/webmcp/registry";
 
 // The human-approval half of the loop described in spec section 16/30: an
 // agent's high-impact tool call creates a pending ApprovalRequest instead
 // of mutating anything; these two actions are the only way one ever turns
 // into a real change, and they only run for the signed-in owner of the
-// request (approveRequest/rejectRequest re-check that).
+// request (approveRequest/rejectRequest re-check that). getTool is passed
+// straight through as the resolver — see approval.service.ts's
+// ExecutableTool doc comment for why that's an explicit parameter rather
+// than a registry populated by import-time side effects.
 
 export async function approveRequestAction(approvalId: string) {
   try {
     const userId = await requireUserId();
-    const result = await approveRequest(userId, approvalId, "human");
+    const result = await approveRequest(userId, approvalId, "human", getTool);
     revalidatePath("/app");
     return toServiceResult(result);
   } catch (error) {
