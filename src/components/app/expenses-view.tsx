@@ -252,7 +252,7 @@ export function ExpensesView({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card data-testid="budget-vs-actual">
           <CardHeader>
             <CardTitle>Budget vs. actual</CardTitle>
           </CardHeader>

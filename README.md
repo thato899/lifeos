@@ -132,14 +132,17 @@ WebMCP-flagged browser to check yourself:
 
 ```bash
 docker compose up -d db
-npm run test
+npm run test         # 46 unit + integration tests
+npm run test:e2e     # 3 real-browser tests (re-seeds the demo account first)
 ```
 
-46 tests: unit tests for the planning heuristic (priority scoring,
-conflict detection, day/week planning, spending analysis), WebMCP
-registry sanity checks, and real integration tests against Postgres
-covering validation, the approval-gating flow (a task is _not_ deleted
-until approved), and cross-user data isolation. Full breakdown, the
+Unit tests for the planning heuristic (priority scoring, conflict
+detection, day/week planning, spending analysis), WebMCP registry sanity
+checks, real integration tests against Postgres covering validation, the
+approval-gating flow (a task is _not_ deleted until approved), and
+cross-user data isolation — plus a Playwright e2e suite that drives the
+actual flagship scenario through a real browser against a real server,
+including clicking **Approve** and confirming the change lands. Full breakdown, the
 spec-required natural-language evaluation table, and how the flagship
 scenario was verified live in an actual browser:
 **[docs/testing.md](docs/testing.md)**.

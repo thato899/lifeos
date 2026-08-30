@@ -135,6 +135,7 @@ export function RoutinesView({
                         type="button"
                         variant="ghost"
                         size="icon"
+                        aria-label={`Remove step ${i + 1}`}
                         onClick={() =>
                           setSteps((prev) => prev.filter((_, idx) => idx !== i))
                         }

@@ -5,6 +5,7 @@
 ```bash
 npm run test          # vitest run — unit + integration tests
 npm run test:watch    # same, watch mode
+npm run test:e2e      # playwright — real browser against a real running server
 npm run typecheck     # tsc --noEmit
 npm run lint          # eslint
 npm run build         # production build (also type-checks)
@@ -15,6 +16,14 @@ npm run build         # production build (also type-checks)
 tests run against this real database, not a mock; they create and tear
 down their own ephemeral users so they don't collide with the seeded demo
 account or each other. 46 tests currently pass.
+
+`npm run test:e2e` re-seeds the demo account first (`pretest:e2e` →
+`npm run db:seed`, so it's safe to run repeatedly) and starts/reuses a
+dev server on `localhost:3000` (see `playwright.config.ts`). 3 tests
+currently pass, covering the same ground as the "Live verification"
+section below — this is that verification, checked into the repo rather
+than left as one-off manual scripts. First run downloads a Chromium
+binary if one isn't cached (`npx playwright install chromium`).
 
 ## What's covered, and at what level
 
@@ -72,45 +81,47 @@ calls — end to end:
   import-time side effect — a resolver that legitimately finds nothing
   surfaces `NO_EXECUTOR`, proving the lookup isn't silently short-circuited.
 
-## Live verification (manual, browser-driven)
+## Live browser verification — `tests/e2e/flagship.spec.ts` (3 tests)
 
-The automated suite above runs everything through the same process, which
-turned out to hide one real bug (the approval-resolution one, detailed in
-`docs/architecture.md`) that only a genuine click-through caught. Before
-calling any of this done, the full stack was driven live with Playwright
-against a running dev server and the seeded demo account:
+The unit/integration suite above runs everything through one process,
+which turned out to hide a real bug (the approval-resolution one,
+detailed in `docs/architecture.md`) that only a genuine click-through
+caught. That verification is now a checked-in Playwright e2e suite,
+`npm run test:e2e`, run against a real dev server and real Postgres:
 
-1. Signed in via the demo button → landed on `/app/dashboard` with real
-   seeded data rendering correctly.
-2. Visually verified every module page (dashboard, tasks, calendar,
-   goals, expenses) against the seeded "messy week" data.
-3. Called the actual `POST /api/mcp/execute` HTTP endpoint (the same one
-   a browser's registered tool `execute()` calls) through the full
-   flagship sequence: `get_today_overview → get_tasks →
-identify_conflicts → plan_my_week → reschedule_task →
-analyze_spending → delete_budget`.
-4. Confirmed the resulting pending approval rendered correctly in the
-   Agent Activity panel, with working Approve/Reject buttons.
-5. Clicked **Approve** in the real UI and confirmed the entertainment
-   budget actually disappeared from the Expenses page — a real database
-   change, reflected without a manual reload (`router.refresh()`).
+1. Signs in via the demo button, confirms the dashboard renders the
+   seeded "messy week" data (the overdue task, etc.).
+2. Drives the full flagship WebMCP sequence through
+   `POST /api/mcp/execute` (the same endpoint a browser's registered
+   tool `execute()` calls): `get_today_overview → get_tasks →
+identify_conflicts → analyze_spending → delete_budget`.
+3. Confirms the resulting pending approval renders in the real Agent
+   Activity panel UI (not just the API response).
+4. Clicks the real **Approve** button and confirms — both via the toast
+   and by re-fetching `/api/activity` — that the request is now
+   `approved`, then confirms the entertainment budget is actually gone
+   from the "Budget vs. actual" card on the Expenses page (scoped by
+   `data-testid`, not a same-page-text hope), with no manual reload.
+5. A separate test confirms a single-task `reschedule_task` executes
+   directly with no approval step, as designed.
 
 This is also how the timezone bug (day-key math breaking for any UTC+
 timezone) and the Tool Inspector table-layout bug were found — both
-before they reached this document.
+before either reached this document — and how two Playwright strict-mode
+locator ambiguities were caught and fixed while writing this suite
+itself (see the git history for `tests/e2e/flagship.spec.ts`).
 
-### Why not a real browser WebMCP call?
+### Why this isn't a real `document.modelContext.registerTool()` call
 
-As of this writing, the Chromium build available in this environment
-(via Playwright) doesn't expose `document.modelContext` — the WebMCP
-Imperative API is behind an active origin trial / flag in Chrome itself
-(see `docs/webmcp.md`, "Testing WebMCP locally"). The live verification
-above therefore calls `POST /api/mcp/execute` directly with the same
-payload shape a real registered tool's `execute()` sends — this validates
-every part of the stack except the literal `registerTool()` call and
-browser-side discovery, which requires a WebMCP-flagged Chrome and is
-documented as a manual step in `docs/webmcp.md` rather than claimed here
-as automated.
+As of this writing, the Chromium build Playwright installs doesn't expose
+`document.modelContext` — the WebMCP Imperative API is behind an active
+origin trial / flag in real Chrome (see `docs/webmcp.md`, "Testing WebMCP
+locally"). The e2e suite therefore calls `POST /api/mcp/execute` directly
+with the same payload shape a real registered tool's `execute()` sends —
+this validates every part of the stack except the literal
+`registerTool()` call and browser-side tool discovery, which requires a
+WebMCP-flagged Chrome and is documented as a manual step in
+`docs/webmcp.md` rather than claimed here as automated.
 
 ## Evaluation suite (spec section 39): natural-language request → expected tool(s)
 
@@ -124,18 +135,18 @@ written specifically to make an agent choose it for this phrasing (see
 each tool's `description` in `src/webmcp/tools/*.ts`), and every one has
 been called for real per the sections above.
 
-| Request                                                               | Expected tool(s)                                                                                                                     | Verified                                                              |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| "Show me everything I need to do today."                              | `get_today_overview`                                                                                                                 | Live + integration test                                               |
-| "What am I behind on?"                                                | `get_tasks` or `prioritize_tasks` (overdue-aware)                                                                                    | Registry test (tool exists, described for this)                       |
-| "Plan my day around my available time."                               | `get_schedule` + `get_tasks` + `plan_my_day`                                                                                         | Unit tests on `planDay()`; tool registered                            |
-| "Move grocery shopping to Saturday."                                  | `get_tasks` (to find the ID) + `reschedule_task`                                                                                     | Live (flagship demo, exact phrasing used in tool description)         |
-| "Create a goal to save R20,000 by December."                          | `create_goal`                                                                                                                        | Registry test; matches spec's exact example in the tool's description |
-| "How much did I spend on food this month?"                            | `get_expenses` + `analyze_spending`                                                                                                  | Live (`analyze_spending` called in the flagship sequence)             |
-| "Create a shopping list for Saturday."                                | `create_shopping_list`                                                                                                               | Registry test; description matches phrasing                           |
-| "I have three hours free tomorrow. What should I work on?"            | `get_tasks` + `plan_my_day` (`availableMinutes: 180`)                                                                                | Unit tests on `planDay()`'s `availableMinutes` budget                 |
-| "I have a busy week. Organize it. Don't schedule anything after 7pm." | `get_today_overview` → `get_tasks` → `get_schedule` → `identify_conflicts` → `plan_my_week` (`constraints.noScheduleAfter: "19:00"`) | Live, full flagship sequence                                          |
-| "Remove my entertainment spending target."                            | `delete_budget` (requires approval)                                                                                                  | Live, including the approval → Approve click → verified removed       |
+| Request                                                               | Expected tool(s)                                                                                                                     | Verified                                                                            |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| "Show me everything I need to do today."                              | `get_today_overview`                                                                                                                 | e2e + integration test                                                              |
+| "What am I behind on?"                                                | `get_tasks` or `prioritize_tasks` (overdue-aware)                                                                                    | Registry test (tool exists, described for this)                                     |
+| "Plan my day around my available time."                               | `get_schedule` + `get_tasks` + `plan_my_day`                                                                                         | Unit tests on `planDay()`; tool registered                                          |
+| "Move grocery shopping to Saturday."                                  | `get_tasks` (to find the ID) + `reschedule_task`                                                                                     | e2e (`flagship.spec.ts`, exact phrasing used in tool description)                   |
+| "Create a goal to save R20,000 by December."                          | `create_goal`                                                                                                                        | Registry test; matches spec's exact example in the tool's description               |
+| "How much did I spend on food this month?"                            | `get_expenses` + `analyze_spending`                                                                                                  | e2e (`analyze_spending` called in `flagship.spec.ts`)                               |
+| "Create a shopping list for Saturday."                                | `create_shopping_list`                                                                                                               | Registry test; description matches phrasing                                         |
+| "I have three hours free tomorrow. What should I work on?"            | `get_tasks` + `plan_my_day` (`availableMinutes: 180`)                                                                                | Unit tests on `planDay()`'s `availableMinutes` budget                               |
+| "I have a busy week. Organize it. Don't schedule anything after 7pm." | `get_today_overview` → `get_tasks` → `get_schedule` → `identify_conflicts` → `plan_my_week` (`constraints.noScheduleAfter: "19:00"`) | e2e, full flagship sequence (`flagship.spec.ts`)                                    |
+| "Remove my entertainment spending target."                            | `delete_budget` (requires approval)                                                                                                  | e2e, including the approval → Approve click → verified removed (`flagship.spec.ts`) |
 
 ## What's not automated (and the honest reason)
 
