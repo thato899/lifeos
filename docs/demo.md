@@ -1,5 +1,8 @@
 # Demo
 
+**Live URL:** https://lifeos-nine-neon.vercel.app — click **Try the demo**,
+no signup needed.
+
 ## Demo account
 
 - **Email:** `alex@demo.lifeos.app`

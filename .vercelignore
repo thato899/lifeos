@@ -1,0 +1,12 @@
+# Never ship local dev secrets/config to a Vercel deployment — production
+# config comes entirely from `vercel env`, set via the dashboard/CLI.
+.env
+.env.local
+.env.development.local
+
+# Local-only tooling, not needed in the deployed bundle.
+docker-compose.yml
+tests/
+playwright.config.ts
+playwright-report/
+test-results/

@@ -9,6 +9,9 @@ rather than one being a chatbot bolted onto the other's dashboard.
 
 Built for the **OpenAI WebMCP Challenge 2026**.
 
+**Live:** [lifeos-nine-neon.vercel.app](https://lifeos-nine-neon.vercel.app)
+— click **Try the demo** to sign in instantly with realistic seeded data.
+
 ---
 
 ## 1. What LifeOS is
@@ -160,26 +163,51 @@ one known low-severity dev-dependency advisory:
 
 ## 10. Deployment
 
-Designed for Vercel (Next.js-native) + any managed Postgres (Vercel
-Postgres, Neon, Supabase, or the same `docker-compose.yml` on a small VM
-for a fixed demo URL).
+**Live now** on Vercel + Prisma Postgres (via the Vercel Marketplace
+integration): **https://lifeos-nine-neon.vercel.app**. The GitHub repo is
+connected, so every push to `main` deploys automatically.
+
+How it was set up, in order (reproducible for a fork):
 
 ```bash
-# Environment variables required in production:
-DATABASE_URL=...          # production Postgres connection string
-AUTH_SECRET=...           # generate with: openssl rand -base64 32
-NEXTAUTH_URL=https://...  # the deployed URL
-LIFEOS_ENABLE_DEMO=true   # or "false" to disable the one-click demo
+vercel login                                    # or: vercel login (device/browser flow)
+vercel link                                     # creates the Vercel project, connects the GitHub repo
+vercel integration add prisma/prisma-postgres   # provisions Postgres, injects DATABASE_URL
+                                                 # (requires accepting marketplace terms in-browser once)
 
-npx prisma migrate deploy
-npm run db:seed           # optional, to have a demo account live
-npm run build
-npm start
+# Migrate + seed the production database (uses the DATABASE_URL vercel env pull writes to .env.local):
+DATABASE_URL="$(node -e "console.log(require('dotenv').parse(require('fs').readFileSync('.env.local')).DATABASE_URL)")" \
+  npx prisma migrate deploy
+DATABASE_URL="$(node -e "console.log(require('dotenv').parse(require('fs').readFileSync('.env.local')).DATABASE_URL)")" \
+  npx tsx prisma/seed.ts
+
+# Remaining env vars (AUTH_SECRET generated fresh, not reused from local dev):
+vercel env add AUTH_SECRET production
+vercel env add AUTH_URL production        # the assigned https://*.vercel.app URL
+vercel env add NEXTAUTH_URL production    # same value, for compatibility
+vercel env add LIFEOS_ENABLE_DEMO production
+
+vercel --prod
 ```
 
+`postinstall: "prisma generate"` (`package.json`) is what makes this work
+on a platform that runs a fresh `npm install` — `src/generated/prisma` is
+gitignored as generated code, and without this a clean deploy fails with
+a module-not-found error (found and fixed while setting this up; see git
+history).
+
+`.vercelignore` excludes the local `.env`/`docker-compose.yml`/test files
+from the uploaded bundle — Vercel's own env vars are the only source of
+truth in production, never a locally-committed dev value.
+
 HTTPS is required for WebMCP (`document.modelContext` is a
-`[SecureContext]`-gated API per the spec) — any standard Vercel/HTTPS
-deployment satisfies this automatically.
+`[SecureContext]`-gated API per the spec) — Vercel's deployments are
+HTTPS by default, so this is satisfied automatically.
+
+To deploy your own fork against different infrastructure: any Next.js
+host + managed Postgres (Neon, Supabase, or the same
+`docker-compose.yml` on a small VM) works — just set the four env
+variables above and run `npx prisma migrate deploy && npm run build`.
 
 ## 11. Hackathon demo workflow
 
