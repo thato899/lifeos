@@ -43,6 +43,9 @@ yarn-error.log*
 /blob-report/
 /playwright/.cache/
 
+# generated demo video (large binary; regenerate with scripts/record-demo.mjs)
+/demo-recording/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

@@ -211,8 +211,9 @@ variables above and run `npx prisma migrate deploy && npm run build`.
 
 ## 11. Hackathon demo workflow
 
-The exact scenario, the seeded data behind it, and a suggested 3-minute
-video script: **[docs/demo.md](docs/demo.md)**.
+The exact scenario, the seeded data behind it, and a recorded walkthrough
+(`node scripts/record-demo.mjs`, captioned, against the live deployment):
+**[docs/demo.md](docs/demo.md)**.
 
 ---
 

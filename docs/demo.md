@@ -3,6 +3,29 @@
 **Live URL:** https://lifeos-nine-neon.vercel.app — click **Try the demo**,
 no signup needed.
 
+## Recorded walkthrough
+
+`scripts/record-demo.mjs` drives a real browser through the exact
+flagship scenario below against the live deployment and records it
+(Playwright's `recordVideo`, captioned on-screen since there's no
+narration audio):
+
+```bash
+node scripts/record-demo.mjs                              # against the live URL
+node scripts/record-demo.mjs http://localhost:3000         # against a local dev server
+```
+
+Produces `demo-recording/demo.webm` (~2 min). **Honesty note, stated in
+the video's own captions too:** the "agent" steps call
+`POST /api/mcp/execute` directly — the exact payload shape a real
+browser-registered WebMCP tool's `execute()` sends (see
+`docs/webmcp.md`) — rather than a literal `document.modelContext`
+round-trip, since no Chromium build available here yet ships that origin
+trial feature. Everything else (the UI, the approval flow, the actual
+database change) is the real thing. Re-run `npm run db:seed` (or the
+production equivalent) afterward to reset the demo account, since the
+script does perform real mutations (a reschedule and a budget deletion).
+
 ## Demo account
 
 - **Email:** `alex@demo.lifeos.app`
