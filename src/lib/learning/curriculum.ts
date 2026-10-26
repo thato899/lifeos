@@ -209,7 +209,7 @@ export function recommendPath(profile: LearnerProfile): PlanItem[] {
       const days = recency.get(id);
       const goalWeight = id === profile.targetId ? 26 : 12;
       const gapWeight = (100 - score) * 0.52;
-      const behaviorWeight = days === null ? 12 : Math.min(days, 30) / 30 * 16;
+      const behaviorWeight = days == null ? 12 : Math.min(days, 30) / 30 * 16;
       const sessionFit = topic.durationMinutes <= profile.sessionMinutes ? 8 : 3;
       return { id, topic, score, priority: gapWeight + goalWeight + behaviorWeight + sessionFit, days };
     });
@@ -217,7 +217,7 @@ export function recommendPath(profile: LearnerProfile): PlanItem[] {
     const selected = scored[0];
     const reasons = [
       selected.score < 65 ? `recent check-in shows ${selected.score}% mastery` : `${selected.score}% mastery could use one more review`,
-      selected.days === null ? "no practice data yet" : selected.days >= 10 ? `last practiced ${selected.days} days ago` : null,
+      selected.days == null ? "no practice data yet" : selected.days >= 10 ? `last practiced ${selected.days} days ago` : null,
       selected.id === profile.targetId ? "directly supports your chosen learning goal" : "builds a prerequisite skill for your goal",
     ].filter(Boolean);
     plan.push({ topic: selected.topic, mastery: selected.score, priority: Math.round(selected.priority), reason: reasons.join(" · ") });
