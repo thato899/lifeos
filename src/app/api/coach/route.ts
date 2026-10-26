@@ -96,7 +96,8 @@ export async function POST(request: Request) {
     activeGoals: overview.goals.map(({ title, progress }) => ({ title, progress })),
     suggestedDayPlan: {
       proposedBlocks: overview.suggestedDayPlan.proposedBlocks.map(
-        ({ title, start, end, estimatedMinutes }) => ({
+        ({ taskId, title, start, end, estimatedMinutes }) => ({
+          taskId,
           title,
           start: start.toISOString(),
           end: end.toISOString(),
@@ -172,7 +173,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "DeepSeek returned an incomplete reply. Please try again." }, { status: 502 });
     }
 
-    return NextResponse.json({ reply: parsedReply.data });
+    return NextResponse.json({
+      reply: parsedReply.data,
+      // Keep the schedule proposal deterministic and separate from model output.
+      suggestedDayPlan: lifeSnapshot.suggestedDayPlan,
+    });
   } catch {
     return NextResponse.json(
       { error: "The AI service is unavailable right now. Please try again shortly." },

@@ -112,6 +112,11 @@ export function planDay(params: {
   );
 
   const dayKey = localDateKey(date);
+  const scheduledTaskIds = new Set(
+    existingSchedule
+      .filter((block) => localDateKey(block.start) === dayKey && block.taskId)
+      .map((block) => block.taskId!),
+  );
   const busy: Interval[] = existingSchedule
     .filter((b) => localDateKey(b.start) === dayKey)
     .map((b) => ({
@@ -131,6 +136,7 @@ export function planDay(params: {
       (t.status === "inbox" ||
         t.status === "planned" ||
         t.status === "in_progress") &&
+      !scheduledTaskIds.has(t.id) &&
       !(t.category && excludeCategories.includes(t.category)),
   );
   const ranked = prioritizeTasks(eligible);
