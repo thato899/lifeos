@@ -3,7 +3,9 @@
 LifeOS already organizes tasks, deadlines, schedules, and goals. People still
 have to connect those pieces when deciding what to do next. The AI Coach turns
 that personal context into a short, practical suggestion, such as choosing a
-focus for today or finding time to make progress on a goal.
+focus for today or finding time to make progress on a goal. It now receives
+LifeOS's existing deterministic day plan, so the model can explain a feasible
+plan instead of guessing how much time is free.
 
 The coach is deliberately advisory. LifeOS already has working deterministic
 planning and explicit approval gates for consequential changes. A model can be
@@ -28,6 +30,8 @@ server-only environment variable and is never sent to the browser.
 - Model output is displayed as plain text and never executed as a command.
 - It cannot create, edit, or delete LifeOS data.
 - Requests are length-limited and rate-limited per user.
+- Up to three recent exchanges are held in page memory and sent to DeepSeek for
+  follow-up questions; they are not persisted to the database.
 - If DeepSeek is not configured, the page explains that `DEEPSEEK_API_KEY` is
   needed and the rest of LifeOS remains usable.
 

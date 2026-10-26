@@ -31,7 +31,7 @@ export default async function CoachPage() {
       </Card>
 
       <p className="text-muted-foreground text-xs leading-relaxed">
-        Your question and a small snapshot of your LifeOS priorities, deadlines, schedule, and goals are sent to DeepSeek to generate the reply. The coach only suggests actions; it does not change your LifeOS data.
+        Your question, recent conversation, and a small LifeOS snapshot that includes a schedule plan are sent to DeepSeek to generate the reply. The coach only suggests actions; it does not change your LifeOS data. Conversation history is kept only in this page session.
       </p>
     </div>
   );

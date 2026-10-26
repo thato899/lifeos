@@ -97,9 +97,11 @@ Needs approval (destructive / irreversible / financial-target changes):
 ## AI Coach
 
 The `feat/deepseek-ai-assistant` branch adds an advisory AI Coach that reads a
-small snapshot of the signed-in user's priorities, deadlines, schedule, and
-goals, then asks DeepSeek for a practical suggestion. It cannot change LifeOS
-data. See [docs/WHY_AI_COACH.md](docs/WHY_AI_COACH.md) for the rationale and
+small snapshot of the signed-in user's priorities, deadlines, schedule, goals,
+and the deterministic day plan, then asks DeepSeek for a practical suggestion.
+Bounded follow-up context lets the user refine advice without storing chat
+history. It cannot change LifeOS data. See
+[docs/WHY_AI_COACH.md](docs/WHY_AI_COACH.md) for the rationale and
 data-handling boundaries.
 
 To enable it locally, add `DEEPSEEK_API_KEY` to `.env`. The default API URL and

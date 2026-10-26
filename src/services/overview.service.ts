@@ -50,6 +50,12 @@ export async function getTodayOverview(userId: string) {
     },
     orderBy: { start: "asc" },
   });
+  const suggestedDayPlan = planDay({
+    date: now,
+    tasks,
+    existingSchedule: todaysSchedule,
+    prefs,
+  });
 
   const upcomingDeadlines = tasks
     .filter(
@@ -94,6 +100,7 @@ export async function getTodayOverview(userId: string) {
       dueDate: t.dueDate,
     })),
     todaysSchedule,
+    suggestedDayPlan,
     upcomingDeadlines,
     goals: importantGoals.map((g) => ({
       id: g.id,
