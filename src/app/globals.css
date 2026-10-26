@@ -117,6 +117,24 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+:root[data-contrast="high"] {
+  --foreground: oklch(0.08 0 0);
+  --muted-foreground: oklch(0.28 0 0);
+  --border: oklch(0.48 0 0);
+  --input: oklch(0.55 0 0);
+  --ring: oklch(0.25 0 0);
+  --destructive: oklch(0.42 0.18 27);
+}
+
+:root.dark[data-contrast="high"] {
+  --foreground: oklch(0.98 0 0);
+  --muted-foreground: oklch(0.88 0 0);
+  --border: oklch(0.72 0 0);
+  --input: oklch(0.68 0 0);
+  --ring: oklch(0.9 0 0);
+  --destructive: oklch(0.82 0.18 27);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -127,6 +145,11 @@
   html {
     @apply font-sans;
   }
+}
+
+:root[data-contrast="high"] :is(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
 }
 
 /* Spec section 40: reduced-motion support. Radix/shadcn animations

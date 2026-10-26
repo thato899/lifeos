@@ -31,6 +31,7 @@ import { WebmcpStatusPill } from "@/components/webmcp/webmcp-status-pill";
 import { ActivityPanel } from "./activity-panel";
 import { CommandPalette } from "./command-palette";
 import { cn } from "@/lib/utils";
+import { ReadAloudControl } from "./read-aloud-control";
 
 const NAV = [
   { href: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -61,6 +62,12 @@ export function AppShell({
   return (
     <WebmcpProvider>
       <div className="flex min-h-full flex-1">
+        <a
+          href="#main-content"
+          className="bg-background text-foreground focus:ring-ring sr-only z-50 rounded-md p-3 focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:ring-2"
+        >
+          Skip to main content
+        </a>
         <aside className="hidden w-56 shrink-0 flex-col border-r px-3 py-4 md:flex">
           <Link
             href="/app/dashboard"
@@ -102,6 +109,7 @@ export function AppShell({
             <CommandPalette />
             <div className="flex items-center gap-3">
               <WebmcpStatusPill />
+              <ReadAloudControl />
               <Sheet open={activityOpen} onOpenChange={setActivityOpen}>
                 <SheetTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-1.5">
@@ -121,7 +129,7 @@ export function AppShell({
               </span>
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto px-4 py-6 md:px-6">
+          <main id="main-content" className="flex-1 overflow-y-auto px-4 py-6 md:px-6">
             {children}
           </main>
         </div>

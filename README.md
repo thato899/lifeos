@@ -113,6 +113,14 @@ This branch extends existing LifeOS code and therefore does not meet the
 Build With AI: Basics requirement that the submission be a new project started
 from an empty folder during the submission period.
 
+## Accessibility controls
+
+The app shell includes a read-aloud control for the current page, with the
+device's available speech voices selectable in Settings. Appearance settings
+allow light, dark, or device theme and a high-contrast palette. Read-aloud
+voice and speed, theme, and contrast preferences are stored in this browser.
+The app also provides a keyboard skip link to the page's main content.
+
 ## 6. Run locally
 
 Requires Node.js 22+, Docker (for local Postgres), and npm.

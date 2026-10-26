@@ -10,6 +10,7 @@ import { updateSchedulingPreferencesAction } from "@/lib/actions/settings";
 import { deleteBudgetAction } from "@/lib/actions/expenses";
 import { formatCurrency } from "@/lib/format";
 import { Trash2 } from "lucide-react";
+import { AppearanceSettings } from "./appearance-settings";
 
 export function SettingsView({
   email,
@@ -39,6 +40,15 @@ export function SettingsView({
         <CardContent className="flex flex-col gap-1 text-sm">
           <p>{name}</p>
           <p className="text-muted-foreground">{email}</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Appearance & accessibility</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AppearanceSettings />
         </CardContent>
       </Card>
 
