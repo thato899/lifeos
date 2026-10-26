@@ -94,6 +94,23 @@ Write: `create_task`, `update_task`, `complete_task`, `reopen_task`,
 Needs approval (destructive / irreversible / financial-target changes):
 `delete_task`, `apply_schedule_plan`, `set_budget`, `delete_budget`.
 
+## AI Coach
+
+The `feat/deepseek-ai-assistant` branch adds an advisory AI Coach that reads a
+small snapshot of the signed-in user's priorities, deadlines, schedule, and
+goals, then asks DeepSeek for a practical suggestion. It cannot change LifeOS
+data. See [docs/WHY_AI_COACH.md](docs/WHY_AI_COACH.md) for the rationale and
+data-handling boundaries.
+
+To enable it locally, add `DEEPSEEK_API_KEY` to `.env`. The default API URL and
+model are in `.env.example`; the key is only used by the server. Questions and
+the disclosed LifeOS snapshot are sent to DeepSeek when the user asks the
+coach. This feature requires a public repository if submitted to a hackathon.
+
+This branch extends existing LifeOS code and therefore does not meet the
+Build With AI: Basics requirement that the submission be a new project started
+from an empty folder during the submission period.
+
 ## 6. Run locally
 
 Requires Node.js 22+, Docker (for local Postgres), and npm.

@@ -1,7 +1,7 @@
 /**
- * A minimal in-memory sliding-window rate limiter for the WebMCP execute
- * endpoint (spec section 23: "rate limiting where appropriate"). Scoped per
- * userId so one runaway agent loop can't hammer the database.
+ * A minimal in-memory sliding-window rate limiter for user-scoped endpoints.
+ * Defaults to the WebMCP execute endpoint's limit; callers may set a tighter
+ * window and call count for more expensive operations such as AI requests.
  *
  * Known limitation, documented here rather than hidden: this state is
  * per-process. On a multi-instance or serverless deployment each instance
@@ -14,19 +14,21 @@ const MAX_CALLS_PER_WINDOW = 30;
 
 const callLog = new Map<string, number[]>();
 
-export function checkRateLimit(key: string): {
+export function checkRateLimit(
+  key: string,
+  windowMs = WINDOW_MS,
+  maxCalls = MAX_CALLS_PER_WINDOW,
+): {
   allowed: boolean;
   retryAfterMs?: number;
 } {
   const now = Date.now();
-  const timestamps = (callLog.get(key) ?? []).filter(
-    (t) => now - t < WINDOW_MS,
-  );
+  const timestamps = (callLog.get(key) ?? []).filter((t) => now - t < windowMs);
 
-  if (timestamps.length >= MAX_CALLS_PER_WINDOW) {
+  if (timestamps.length >= maxCalls) {
     const oldest = timestamps[0];
     callLog.set(key, timestamps);
-    return { allowed: false, retryAfterMs: WINDOW_MS - (now - oldest) };
+    return { allowed: false, retryAfterMs: windowMs - (now - oldest) };
   }
 
   timestamps.push(now);
