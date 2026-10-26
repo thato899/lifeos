@@ -16,6 +16,7 @@ import {
   LogOut,
   Bot,
   Sparkles,
+  BookOpen,
 } from "lucide-react";
 import { signOutAction } from "@/lib/actions/session";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ const NAV = [
   { href: "/app/expenses", label: "Expenses", icon: Wallet },
   { href: "/app/routines", label: "Routines", icon: Repeat },
   { href: "/app/coach", label: "AI Coach", icon: Sparkles },
+  { href: "/app/learn", label: "StudyPath", icon: BookOpen },
 ];
 
 const SECONDARY_NAV = [
